@@ -1,0 +1,97 @@
+#!/usr/bin/env python
+import ConfigParser
+
+
+import argparse
+import shlex
+import psutil
+import os
+import logging
+from var_monitor import ProcessTreeMonitor
+
+CHECK_LAPSE = 0 # time between each usage check in seconds
+REPORT_LAPSE = 1 # time between each usage print in seconds
+HS06_REF = 12.2 # reference to compute the HS06
+VAR_LIST = ['max_vms', 'max_rss', 'total_io_read',
+             'total_io_write', 'total_cpu_time']
+
+logFormatter = logging.Formatter("%(asctime)s : [%(levelname)s] - %(message)s")
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def parse_cmd_args(args_list):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--logdir', '-l', required=False)
+    args = parser.parse_known_args(args_list)
+    return args
+    
+
+def parse_main_args():
+    parser = argparse.ArgumentParser(description="CLI utility for running and monitoring processes.")
+    parser.add_argument("--command", "-c", required=True, help="Command to be run and monitorized")
+    parser.add_argument("--conf", required=False, help="Configuration file")
+
+    args = parser.parse_args()
+    return args
+
+
+ARGS_FUNC_DICT = {
+    'var_list': lambda x: x.split(','),
+    'check_lapse': lambda x: float(x),
+    'report_lapse': lambda x: float(x)}
+
+def modify_args(elem):
+    k, v = elem
+    new_v = ARGS_FUNC_DICT[k](v)
+    return k, new_v
+
+
+def main():
+    args = parse_main_args()
+    
+    # Load configuration
+    if args.conf:
+        conf_file = args.conf
+    else:
+        conf_file = '/etc/run_and_monitorize/run_and_monitorize.cfg'
+    config = ConfigParser.ConfigParser()
+    config.read(conf_file)
+    
+    # Get the command to be run and monitorized
+    command_list = shlex.split(args.command)    
+    
+    # Configure logging
+    # Get logging directory 
+    if config.getboolean('logging', 'logdir_implicit'):
+        cmd_args, unknown = parse_cmd_args(command_list)
+        logdir = cmd_args.logdir or '.'
+    elif config.get('logging', 'logdir'):
+        logdir =  config.get('logging', 'logdir')
+    else:
+        logdir = '.'
+    
+    # get log file    
+    if config.get('logging', 'logfile'):
+        logfile = config.get('logging', 'logfile')
+    else:
+        logfile = 'usage.log'
+    
+    # Redirect logging handler
+    fileHandler = logging.FileHandler(os.path.join(logdir, logfile))
+        
+    fileHandler.setFormatter(logFormatter)
+    fileHandler.setLevel(logging.INFO)
+    logger.addHandler(fileHandler)
+    
+    # Initialize the process
+    proc = psutil.Popen(command_list)
+    
+    # Initialize and start the Monitor
+    root_opts = dict(map(modify_args, config.items('root')))    
+    monitor = ProcessTreeMonitor(proc, **root_opts)
+    monitor.start()
+    
+
+if __name__ == '__main__':
+    main()  
+
