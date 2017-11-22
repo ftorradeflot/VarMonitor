@@ -24,7 +24,7 @@ def convert_size(size_bytes):
     return '%s%s' % (s, size_name[i])
 
 
-class VarMonitor():
+class VarMonitor(object):
     
     def reset_values(self):
         self.var_value = 0.0
@@ -163,7 +163,7 @@ class TotalHS06Monitor(CumulativeVarMonitor, RawVarMonitor):
         p.wait()
         
         # Capture the HS06 factor from the stdout
-        m = re.search('HS06_factor=(.*)', p.stdout)
+        m = re.search('HS06_factor=(.*)', p.stdout.read())
         self.HS06_factor = float(m.group(1))
     
     
@@ -174,7 +174,12 @@ class TotalHS06Monitor(CumulativeVarMonitor, RawVarMonitor):
         
         # compute HS06*h
         return self.HS06_factor*(cpu_times.user + cpu_times.system)/3600.0
-         
+    def get_var_value(self):
+        return '{:.4f}'.format(self.var_value)
+
+    def get_summary_value(self):
+        return '{:.4f}'.format(self.summary_value)
+     
 
 VAR_MONITOR_DICT = OrderedDict([('max_vms', MaxVMSMonitor),
             ('max_rss', MaxRSSMonitor),
@@ -189,10 +194,10 @@ class ProcessTreeMonitor():
     def __init__(self, proc, var_list, **kwargs):
         
         self.parent_proc = proc
+        self.kwargs = kwargs
         self.monitor_list = [VAR_MONITOR_DICT[var](var, self) for var in var_list]
         self.report_lapse = kwargs.get('report_lapse', REPORT_LAPSE)
         self.check_lapse = kwargs.get('check_lapse', CHECK_LAPSE)
-        self.kwargs = kwargs
         self.logger = logging.getLogger()
     
     def update_values(self, some_process):
