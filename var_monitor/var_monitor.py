@@ -6,6 +6,9 @@ import math
 import datetime
 import logging
 from collections import OrderedDict
+import shlex
+import subprocess as sp
+import re
 
 CHECK_LAPSE = 0 # time between each usage check in seconds
 REPORT_LAPSE = 1 # time between each usage print in seconds
@@ -146,23 +149,50 @@ class TotalCpuTimeMonitor(CumulativeVarMonitor, RawVarMonitor):
     def get_process_value(self, some_process):
         cpu_times = some_process.cpu_times()
         return cpu_times.user + cpu_times.system 
+
+class TotalHS06Monitor(CumulativeVarMonitor, RawVarMonitor):
     
+    def __init__(self, name, proc_monitor):
+        
+        super(TotalHS06Monitor, self).__init__(name, proc_monitor)
+        
+        # Get HS06 factor
+        # get the script to find the HS06 factor and run it
+        HS06_factor_command_list = shlex.split(proc_monitor.kwargs.get('HS06_factor_func'))
+        p = sp.Popen(HS06_factor_command_list, stdout=sp.PIPE, stderr=sp.PIPE)
+        p.wait()
+        
+        # Capture the HS06 factor from the stdout
+        m = re.search('HS06_factor=(.*)', p.stdout)
+        self.HS06_factor = float(m.group(1))
+    
+    
+    def get_process_value(self, some_process):
+        
+        # get CPU time
+        cpu_times = some_process.cpu_times()
+        
+        # compute HS06*h
+        return self.HS06_factor*(cpu_times.user + cpu_times.system)/3600.0
+         
 
 VAR_MONITOR_DICT = OrderedDict([('max_vms', MaxVMSMonitor),
             ('max_rss', MaxRSSMonitor),
             ('total_io_read', TotalIOReadMonitor),
             ('total_io_write', TotalIOWriteMonitor),
-            ('total_cpu_time', TotalCpuTimeMonitor)])
+            ('total_cpu_time', TotalCpuTimeMonitor),
+            ('total_HS06', TotalHS06Monitor)])
 
 
 class ProcessTreeMonitor():
     
-    def __init__(self, proc, var_list, report_lapse=REPORT_LAPSE, check_lapse=CHECK_LAPSE):
+    def __init__(self, proc, var_list, **kwargs):
         
         self.parent_proc = proc
         self.monitor_list = [VAR_MONITOR_DICT[var](var, self) for var in var_list]
-        self.report_lapse = report_lapse
-        self.check_lapse = check_lapse
+        self.report_lapse = kwargs.get('report_lapse', REPORT_LAPSE)
+        self.check_lapse = kwargs.get('check_lapse', CHECK_LAPSE)
+        self.kwargs = kwargs
         self.logger = logging.getLogger()
     
     def update_values(self, some_process):
