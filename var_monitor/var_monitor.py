@@ -28,7 +28,11 @@ class VarMonitor(object):
     
     def reset_values(self):
         self.var_value = 0.0
+        self.report_value = 0.0
         self.summary_value = 0.0
+    
+    def clean_report_value(self):
+        self.report_value = 0.0
         
     def __init__(self, name, proc_monitor):
         self.name = name
@@ -62,6 +66,9 @@ class RawVarMonitor(VarMonitor):
     def get_var_value(self):
         return self.var_value
     
+    def get_report_value(self):
+        return self.report_value
+    
     def get_summary_value(self):
         return self.summary_value
 
@@ -70,6 +77,9 @@ class MemoryVarMonitor(VarMonitor):
     
     def get_var_value(self):
         return convert_size(self.var_value)
+
+    def get_report_value(self):
+        return convert_size(self.report_value)
 
     def get_summary_value(self):
         return convert_size(self.summary_value)
@@ -82,6 +92,9 @@ class MaxRSSMonitor(MemoryVarMonitor):
             self.var_value = some_process.memory_info().rss
         else:
             self.var_value += some_process.memory_info().rss
+
+    def update_report_value(self):
+        self.report_value = max(self.var_value, self.report_value)
 
     def update_summary_value(self):
         self.summary_value = max(self.var_value, self.summary_value)
@@ -101,6 +114,7 @@ class CumulativeVarMonitor(VarMonitor):
     def reset_values(self):
         self.var_value = 0.0
         self.var_value_dict = {}
+        self.report_value = 0.0
         self.summary_value = 0.0
         self.backup_count = 0
     
@@ -127,6 +141,9 @@ class CumulativeVarMonitor(VarMonitor):
         self.var_value_dict[cur_pid] = cur_val
         
         self.set_value_from_value_dict()
+    
+    def update_report_value(self):
+        self.report_value = self.var_value
     
     def update_summary_value(self):
         self.summary_value = self.var_value
@@ -204,12 +221,23 @@ class ProcessTreeMonitor():
         for monitor in self.monitor_list:
             monitor.update_value(some_process)
     
+    def update_report_values(self, some_process):
+        for monitor in self.monitor_list:
+            monitor.update_report_value(some_process)
+    
     def update_summary_values(self):
         for monitor in self.monitor_list:
-            monitor.update_summary_value()  
+            monitor.update_summary_value()
+    
+    def clean_report_values(self, some_process):
+        for monitor in self.monitor_list:
+            monitor.clean_report_value(some_process)
     
     def get_var_values(self):
         return ', '.join(['{}, {}'.format(monit.name, monit.get_var_value()) for monit in self.monitor_list])
+    
+    def get_report_values(self):
+        return ', '.join(['{}, {}'.format(monit.name, monit.get_report_value()) for monit in self.monitor_list])
     
     def get_summary_values(self):
         return ', '.join(['{}, {}'.format(monit.name, monit.get_summary_value()) for monit in self.monitor_list])
@@ -228,8 +256,13 @@ class ProcessTreeMonitor():
             except:
                 pass
        
+        # update report values
+        self.update_report_values()
+        
         # update summary values
         self.update_summary_values()
+        
+    
     
     def start(self):
         
@@ -245,7 +278,8 @@ class ProcessTreeMonitor():
             # print usage if needed
             now = datetime.datetime.now()
             if (now - time_report).total_seconds() > self.report_lapse:
-                self.logger.info('usage_stats, ' + self.get_var_values())
+                self.logger.info('usage_stats, ' + self.get_report_values())
+                self.clean_report_values()
                 time_report = now
     
             time.sleep(self.check_lapse)
