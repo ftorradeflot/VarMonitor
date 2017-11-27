@@ -28,7 +28,7 @@ class VarMonitor(object):
     
     def reset_values(self):
         self.var_value = 0.0
-        self.report_value = 0.0
+        self.clean_report_value()
         self.summary_value = 0.0
     
     def clean_report_value(self):
@@ -215,29 +215,32 @@ class ProcessTreeMonitor():
         self.monitor_list = [VAR_MONITOR_DICT[var](var, self) for var in var_list]
         self.report_lapse = kwargs.get('report_lapse', REPORT_LAPSE)
         self.check_lapse = kwargs.get('check_lapse', CHECK_LAPSE)
-        self.logger = logging.getLogger()
+        if 'log_file' in kwargs:
+            self._log_file = open(kwargs['log_file'], 'w+')
+        else:
+            self._log_file = sys.stdout
     
     def update_values(self, some_process):
         for monitor in self.monitor_list:
             monitor.update_value(some_process)
     
-    def update_report_values(self, some_process):
+    def update_report_values(self):
         for monitor in self.monitor_list:
-            monitor.update_report_value(some_process)
+            monitor.update_report_value()
     
     def update_summary_values(self):
         for monitor in self.monitor_list:
             monitor.update_summary_value()
     
-    def clean_report_values(self, some_process):
+    def clean_report_values(self):
         for monitor in self.monitor_list:
-            monitor.clean_report_value(some_process)
+            monitor.clean_report_value()
     
     def get_var_values(self):
         return ', '.join(['{}, {}'.format(monit.name, monit.get_var_value()) for monit in self.monitor_list])
     
     def get_report_values(self):
-        return ', '.join(['{}, {}'.format(monit.name, monit.get_report_value()) for monit in self.monitor_list])
+        return ','.join(['{}'.format(monit.get_report_value()) for monit in self.monitor_list]) + '\n'
     
     def get_summary_values(self):
         return ', '.join(['{}, {}'.format(monit.name, monit.get_summary_value()) for monit in self.monitor_list])
@@ -278,7 +281,7 @@ class ProcessTreeMonitor():
             # print usage if needed
             now = datetime.datetime.now()
             if (now - time_report).total_seconds() > self.report_lapse:
-                self.logger.info('usage_stats, ' + self.get_report_values())
+                self._log_file.write(self.get_report_values())
                 self.clean_report_values()
                 time_report = now
     
@@ -286,5 +289,5 @@ class ProcessTreeMonitor():
     
         self.parent_proc.wait()
     
-        self.logger.info('usage_stats_summary, ' + self.get_summary_values())
+        self._log_file.write('usage_stats_summary, ' + self.get_summary_values())
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env python
-import ConfigParser
-
+try:
+    import ConfigParser
+except ModuleNotFoundError:
+    import configparser as ConfigParser
 
 import argparse
 import shlex
@@ -58,10 +60,11 @@ def main():
     
     # Configure logging
     # Get logging directory 
-    if config.getboolean('logging', 'logdir_implicit'):
+    if 'logdir_implicit' in config.items('logging') and \
+    config.getboolean('logging', 'logdir_implicit'):
         cmd_args, unknown = parse_cmd_args(command_list)
         logdir = cmd_args.logdir or '.'
-    elif config.get('logging', 'logdir'):
+    elif 'logdir' in config.items('logging'):
         logdir =  config.get('logging', 'logdir')
     else:
         logdir = '.'
