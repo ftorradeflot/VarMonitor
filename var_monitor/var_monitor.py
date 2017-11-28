@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import os
 import psutil
 import time
 import math
@@ -9,6 +10,8 @@ from collections import OrderedDict
 import shlex
 import subprocess as sp
 import re
+import sys
+import threading
 
 CHECK_LAPSE = 0 # time between each usage check in seconds
 REPORT_LAPSE = 1 # time between each usage print in seconds
@@ -216,9 +219,12 @@ class ProcessTreeMonitor():
         self.report_lapse = kwargs.get('report_lapse', REPORT_LAPSE)
         self.check_lapse = kwargs.get('check_lapse', CHECK_LAPSE)
         if 'log_file' in kwargs:
-            self._log_file = open(kwargs['log_file'], 'w+')
+            if os.path.exists(kwargs['log_file']):
+                raise Exception('File {} already exists'.format(kwargs['log_file']))
+            self._log_file = open(kwargs['log_file'], 'a+')
         else:
             self._log_file = sys.stdout
+        self.lock = threading.RLock()
     
     def update_values(self, some_process):
         for monitor in self.monitor_list:
@@ -240,11 +246,14 @@ class ProcessTreeMonitor():
         return ', '.join(['{}, {}'.format(monit.name, monit.get_var_value()) for monit in self.monitor_list])
     
     def get_report_values(self):
-        return ','.join(['{}'.format(monit.get_report_value()) for monit in self.monitor_list]) + '\n'
+        s = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f') + ','
+        return s + ','.join(['{}'.format(monit.get_report_value()) for monit in self.monitor_list]) + '\n'
     
     def get_summary_values(self):
         return ', '.join(['{}, {}'.format(monit.name, monit.get_summary_value()) for monit in self.monitor_list])
     
+    def get_headers(self):
+        return 'timestamp,' + ','.join([monit.name for monit in self.monitor_list]) + '\n'
     
     def update_all_values(self):
         
@@ -264,10 +273,21 @@ class ProcessTreeMonitor():
         
         # update summary values
         self.update_summary_values()
-        
+
     
+    def write_log(self, log_message):
+            
+        self.lock.acquire()
+        try:
+            self._log_file.write(log_message)
+            if hasattr(self._log_file, 'flush'):
+                self._log_file.flush()
+        finally:
+            self.lock.release()
     
     def start(self):
+        
+        self._log_file.write(self.get_headers())
         
         time_report = datetime.datetime.now()
     
@@ -281,7 +301,7 @@ class ProcessTreeMonitor():
             # print usage if needed
             now = datetime.datetime.now()
             if (now - time_report).total_seconds() > self.report_lapse:
-                self._log_file.write(self.get_report_values())
+                self.write_log(self.get_report_values())
                 self.clean_report_values()
                 time_report = now
     
@@ -289,5 +309,4 @@ class ProcessTreeMonitor():
     
         self.parent_proc.wait()
     
-        self._log_file.write('usage_stats_summary, ' + self.get_summary_values())
 
