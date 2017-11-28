@@ -29,7 +29,9 @@ def parse_cmd_args(args_list):
 
 def parse_main_args():
     parser = argparse.ArgumentParser(description="CLI utility for running and monitoring processes.")
-    parser.add_argument("--command", "-c", required=True, help="Command to be run and monitorized")
+    parser.add_argument("--command", "-c", required=False, help="Command to be run and monitorized")
+    parser.add_argument("--pid", "-p", required=False, help="Id of the process to monitorize",
+                        type=int)
     parser.add_argument("--conf", required=False, help="Configuration file")
 
     args = parser.parse_args()
@@ -58,16 +60,9 @@ def main():
     config = ConfigParser.ConfigParser()
     config.read(conf_file)
     
-    # Get the command to be run and monitorized
-    command_list = shlex.split(args.command)    
-    
     # Configure logging
     # Get logging directory
-    if config.has_option('logging', 'logdir_implicit') and \
-    config.getboolean('logging', 'logdir_implicit'):
-        cmd_args, unknown = parse_cmd_args(command_list)
-        logdir = cmd_args.logdir or '.'
-    elif config.has_option('logging', 'logdir'):
+    if config.has_option('logging', 'logdir'):
         logdir =  config.get('logging', 'logdir')
     else:
         logdir = '.'
@@ -76,13 +71,34 @@ def main():
     if config.has_option('logging', 'logfile'):
         logfile = config.get('logging', 'logfile')
     else:
-        logfile = 'usage_{}.csv'.format(uuid.uuid1().hex)
+        logfile = 'usage_{}.csv'.format(uuid.uuid1().hex)    
     
+    
+    # Get the process to be monitorized
+    if args.pid and args.command:
+        raise Exception('Both --pid and --command provided. Only one of those parameters accepted')    
+    
+    elif not args.pid and not args.command:
+        raise Exception('One of --pid or --command required')
+    
+    elif args.pid:
+        proc = psutil.Process(args.pid)
+        
+    elif args.command:
+        # Get the command to be run and monitorized
+        command_list = shlex.split(args.command) 
+        
+        # Initialize the process
+        proc = psutil.Popen(command_list)
+
+        #Handle the additional case when the logdir is defined inside the command
+        if config.has_option('logging', 'logdir_implicit') and \
+        config.getboolean('logging', 'logdir_implicit'):
+            cmd_args, unknown = parse_cmd_args(command_list)
+            logdir = cmd_args.logdir or '.'
+
     # Compute whole file name
     whole_logfile = os.path.join(logdir, logfile)
-    
-    # Initialize the process
-    proc = psutil.Popen(command_list)
     
     # Initialize and start the Monitor
     monit_kwargs = dict(map(modify_args, config.items('root')))    
