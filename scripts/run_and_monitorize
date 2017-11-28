@@ -8,6 +8,9 @@ import argparse
 import shlex
 import psutil
 import os
+import sys
+import uuid
+
 from var_monitor import ProcessTreeMonitor
 
 CHECK_LAPSE = 0 # time between each usage check in seconds
@@ -59,21 +62,21 @@ def main():
     command_list = shlex.split(args.command)    
     
     # Configure logging
-    # Get logging directory 
-    if 'logdir_implicit' in config.items('logging') and \
+    # Get logging directory
+    if config.has_option('logging', 'logdir_implicit') and \
     config.getboolean('logging', 'logdir_implicit'):
         cmd_args, unknown = parse_cmd_args(command_list)
         logdir = cmd_args.logdir or '.'
-    elif 'logdir' in config.items('logging'):
+    elif config.has_option('logging', 'logdir'):
         logdir =  config.get('logging', 'logdir')
     else:
         logdir = '.'
     
     # get log file    
-    if config.get('logging', 'logfile'):
+    if config.has_option('logging', 'logfile'):
         logfile = config.get('logging', 'logfile')
     else:
-        logfile = 'usage.log'
+        logfile = 'usage_{}.csv'.format(uuid.uuid1().hex)
     
     # Compute whole file name
     whole_logfile = os.path.join(logdir, logfile)
@@ -89,7 +92,9 @@ def main():
     monitor = ProcessTreeMonitor(proc, **monit_kwargs)
     monitor.start()
     
-
+    sys.exit(monitor.parent_proc.returncode)
+    
+    
 if __name__ == '__main__':
     main()  
 
