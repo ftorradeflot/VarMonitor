@@ -276,7 +276,7 @@ class ProcessTreeMonitor():
 
     
     def write_log(self, log_message):
-            
+        
         self.lock.acquire()
         try:
             self._log_file.write(log_message)
@@ -291,7 +291,7 @@ class ProcessTreeMonitor():
         
         time_report = datetime.datetime.now()
     
-        while self.parent_proc.poll() is None:
+        while self.proc_is_running():
     
             try:
                 self.update_all_values()
@@ -308,5 +308,10 @@ class ProcessTreeMonitor():
             time.sleep(self.check_lapse)
     
         self.parent_proc.wait()
+        
+        
+    def proc_is_running(self):
+        
+        return self.parent_proc.is_running() and self.parent_proc.status() != psutil.STATUS_ZOMBIE 
     
 

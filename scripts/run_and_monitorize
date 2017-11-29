@@ -108,7 +108,9 @@ def main():
     monitor = ProcessTreeMonitor(proc, **monit_kwargs)
     monitor.start()
     
-    sys.exit(monitor.parent_proc.returncode)
+    # When the process has been created by the monitor propagate the exit status
+    if hasattr(proc, 'returncode'):
+        sys.exit(proc.returncode)
     
     
 if __name__ == '__main__':
