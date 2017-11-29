@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Handle renaming of ConfigParser from python 2 to 3
 try:
     import ConfigParser
 except ModuleNotFoundError:
@@ -22,7 +23,8 @@ VAR_LIST = ['max_vms', 'max_rss', 'total_io_read', 'total_io_write',
 
 def parse_cmd_args(args_list):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--logdir', '-l', required=False)
+    parser.add_argument('--logdir', required=False, default='.')
+    parser.add_argument('--workdir', required=False, default='.')
     args = parser.parse_known_args(args_list)
     return args
     
@@ -95,7 +97,7 @@ def main():
         if config.has_option('logging', 'logdir_implicit') and \
         config.getboolean('logging', 'logdir_implicit'):
             cmd_args, unknown = parse_cmd_args(command_list)
-            logdir = cmd_args.logdir or '.'
+            logdir = os.path.join(cmd_args.workdir, cmd_args.logdir)
 
     # Compute whole file name
     whole_logfile = os.path.join(logdir, logfile)
