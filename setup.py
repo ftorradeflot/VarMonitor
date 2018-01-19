@@ -10,5 +10,8 @@ setup(name='run_and_monitorize',
       packages=['var_monitor'],
       scripts=['scripts/run_and_monitorize'],
       data_files=[('/etc/run_and_monitorize', ['conf/run_and_monitorize.cfg'])],
-      install_requires=['psutil>=5.2.0']
+      install_requires=['psutil>=5.2.0',
+                        'numpy>=1.11.1'
+                        'matplotlib>=2.0.0',
+                        'pandas>=0.16.2']
      )
