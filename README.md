@@ -82,4 +82,27 @@ logdir_implicit=1 ; boolean, set to True if logdir parameter is inside command t
 
 * logging directory: Implicit `logdir` inside command has precedence over explicit `logdir` option. If none of them exists `cwd` will be assumed as logging directory.
 * log file: `logfile` or `usage.log` will be joined to logdir
-# if 
+
+
+# Parsing the csv usage files
+
+Create a UsageParser instance and load the information from the usage files.
+
+```
+from var_monitor import usage_parse
+parser = usage_parse.UsageParser()
+parser.load_log_files(['wildcard/to/csv/files/1', ..., 'wildcard/to/csv/files/N])
+```
+
+Plot some samples:
+```
+parser.plot_sample(sample_size=3)
+```
+![sample_plot](img/sample.png)
+
+Compute and plot some additional stats:
+```
+parser.plot_additional_stats()
+```
+![RSS hist](img/rss_hist.png)
+
