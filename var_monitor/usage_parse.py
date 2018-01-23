@@ -37,6 +37,11 @@ def compute_df_columns(df):
     df['time_delta_s'] = (df['timestamp'] - df['timestamp'].shift(1)).apply(lambda x: x.total_seconds())
     df['time_spent'] = df['timestamp'] - df['timestamp'][0]
     df['time_spent_s'] = df['time_spent'].apply(lambda x: x.total_seconds())
+    total_duration = df['time_spent_s'].iloc[-1]
+    if np.isclose(total_duration, 0):
+        df['time_spent_rel'] = 0.
+    else:
+        df['time_spent_rel'] = df['time_spent_s']/df['time_spent_s'].iloc[-1]
     
     if 'max_vms' in df.columns:
         df['max_vms_GB'] = df['max_vms'].apply(conversion)
@@ -50,6 +55,13 @@ def compute_df_columns(df):
         df['cpu_perc'] = 100.*(df['total_cpu_time'] - df['total_cpu_time'].shift(1))/df['time_delta_s']
     
     return df
+
+def get_min_2n(some_number):
+    '''
+    find the minimum power of two greater than some_number
+    '''
+    
+    return np.power(2., np.ceil(np.log2(some_number)))
 
 VARLIST = ['max_vms_GB', 'max_rss_GB', 'total_io_read_GB', 'total_io_write_GB',
            'total_cpu_time', 'cpu_perc']
@@ -98,19 +110,24 @@ class UsageParser():
         
         ax_ind = 1
         for var_name in var_list:
+            var_min = np.inf
+            var_max = -np.inf
+            var_axes = []
             for sample_df in sample_dfs:
                 ax = fig.add_subplot(n_vars, sample_size, ax_ind)
+                var_axes.append(ax)
                 ax.plot(sample_df['time_spent_s'], sample_df[var_name])
                 ax.set_xlabel('Time Spent')
                 ax.set_ylabel(var_name)
+                var_max = max([var_max, sample_df[var_name].max()])
+                var_min = min([var_min, sample_df[var_name].min()])
                 ax_ind += 1
+            for ax in var_axes:
+                ax.set_ylim([var_min, var_max])
         
         save_or_show(fig, save_plot, plot_file)
 
-    def compute_additional_stats(self, n_bins=100, hist_bins=None, max_GB=16.):
-        
-        if hist_bins is None:
-            hist_bins = np.linspace(0., max_GB, n_bins + 1)
+    def compute_additional_stats(self, var_list = VARLIST, n_bins=100):
     
         additional_stats = {}
         
@@ -121,27 +138,33 @@ class UsageParser():
         additional_stats['max_duration'] = np.max(durations)
         additional_stats['max_duration_str'] = timedelta(seconds = additional_stats['max_duration']).__str__()
     
-        # compute mean rss histogram
-        mean_rss_hist = np.zeros(n_bins)
-        rss_count = 0.
-        
-        for df in self.dfs:
-            h = np.histogram(df['max_rss_GB'], bins=hist_bins)
-            rss_hist = h[0].astype(float)
-            mean_rss_hist += rss_hist
-            rss_count += len(df['max_rss_GB'])
-        additional_stats['rss_hist'] = mean_rss_hist/rss_count
-        
-        # compute max RSS
-        additional_stats['max_rss'] = max([df['max_rss_GB'].max() for df in self.dfs])
+        # compute rss histogram
+        if 'max_rss_GB' in var_list:
+            mean_rss_hist = np.zeros(n_bins)
+            rss_count = 0.
+            max_rss_GB = max([df['max_rss_GB'].max() for df in self.dfs])
+            print('max_rss_GB: {}'.format(max_rss_GB))
+            max_rss_2n = get_min_2n(max_rss_GB)
+            hist_bins = np.linspace(0., max_rss_2n, n_bins + 1)
+            print('max_rss_2n: {}'.format(max_rss_2n))
+            for df in self.dfs:
+                h = np.histogram(df['max_rss_GB'], bins=hist_bins)
+                rss_hist = h[0].astype(float)
+                mean_rss_hist += rss_hist
+                rss_count += len(df['max_rss_GB'])
+            additional_stats['rss_hist'] = mean_rss_hist/rss_count
+            additional_stats['rss_hist_bins'] = hist_bins
+            
+            # compute max RSS
+            additional_stats['max_rss'] = max([df['max_rss_GB'].max() for df in self.dfs])
         
         self.additional_stats = additional_stats
     
     
     def plot_additional_stats(self, save_plot=False, plot_file=None):
         
-        hist_bins = np.linspace(0., 16., 100 + 1)
-        self.compute_additional_stats(hist_bins = hist_bins)
+        self.compute_additional_stats()
+        hist_bins = self.additional_stats['rss_hist_bins']
         
         hist_bins_centers = np.array((hist_bins[:-1] + hist_bins[1:])/2)
         fig = plt.figure(figsize=(16., 8.))
@@ -151,3 +174,39 @@ class UsageParser():
         ax.set_xlabel('GB RSS')
         
         save_or_show(fig, save_plot, plot_file)
+    
+    def plot_value_range(self, var_list=VARLIST, save_plot=False, plot_file=None):
+        
+        n_vars = len(var_list)
+        
+        fig = plt.figure(figsize=(8, 8*n_vars))
+        
+        x = np.linspace(0, 1, 101)
+        interp_dfs = {}
+        for var_name in var_list:
+            interp_dfs[var_name] = pd.DataFrame([], index=x)
+            
+        for i_df, df in enumerate(self.dfs):
+            for var_name in var_list:
+                interp_dfs[var_name][i_df] = np.interp(x, df['time_spent_rel'], df[var_name])
+        
+        for i_df, (var_name, interp_df) in enumerate(interp_dfs.items()):
+            interp_arr = interp_df.as_matrix()
+            ax = fig.add_subplot(n_vars, 1, i_df + 1)
+            arr_0 = np.percentile(interp_arr, 0., axis=1)
+            arr_25 = np.percentile(interp_arr, 25., axis=1)
+            arr_50 = np.percentile(interp_arr, 50., axis=1)
+            arr_75 = np.percentile(interp_arr, 75., axis=1)
+            arr_100 = np.percentile(interp_arr, 100., axis=1)
+            ax.fill_between(x, arr_0, arr_25, color='lightskyblue')
+            ax.fill_between(x, arr_25, arr_75, color='steelblue')
+            ax.fill_between(x, arr_75, arr_100, color='lightskyblue')
+            ax.plot(x, arr_50, color='darkblue')
+            ax.set_ylabel(var_name)
+            ax.set_xlabel('time %')
+            ax.grid(True)
+            ax.set_xlim([0., 1.])
+
+        save_or_show(fig, save_plot, plot_file)
+        
+        
