@@ -118,3 +118,8 @@ parser.plot_additional_stats()
 ```
 ![RSS hist](img/rss_hist.png)
 
+Plot the 0%, 25%, 50%, 75% and 100% percentiles of the resources usage at each % of total time spent.
+```
+parser.plot_value_range()
+```
+![percentiles](img/percentiles.png)
