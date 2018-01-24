@@ -103,6 +103,8 @@ class UsageParser():
     
     def plot_sample(self, sample_size=1, var_list=VARLIST, save_plot=False, plot_file=None):
         
+        MARGIN = 0.05
+        
         sample_dfs = random.sample(self.dfs, sample_size)
         n_vars = len(var_list)
         
@@ -112,6 +114,7 @@ class UsageParser():
         for var_name in var_list:
             var_min = np.inf
             var_max = -np.inf
+            time_max = -np.inf
             var_axes = []
             for sample_df in sample_dfs:
                 ax = fig.add_subplot(n_vars, sample_size, ax_ind)
@@ -121,9 +124,16 @@ class UsageParser():
                 ax.set_ylabel(var_name)
                 var_max = max([var_max, sample_df[var_name].max()])
                 var_min = min([var_min, sample_df[var_name].min()])
+                time_max = max([time_max, sample_df['time_spent_s'].max()])
                 ax_ind += 1
+            
+            var_margin = MARGIN*(var_max - var_min)
+            var_lim = [var_min - var_margin, var_max + var_margin]
+            time_margin = MARGIN*(time_max)
+            time_lim = [-time_margin, time_max + time_margin]
             for ax in var_axes:
-                ax.set_ylim([var_min, var_max])
+                ax.set_ylim(var_lim)
+                ax.set_xlim(time_lim)
         
         save_or_show(fig, save_plot, plot_file)
 
