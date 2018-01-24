@@ -60,7 +60,7 @@ In order to integrate this monitoring tool with IAL do:
 
 in `$HOME/.ial_drm/conf.ini` add
 
-	extra_commands_before = /path/to/some/script \</pre>
+	extra_commands_before = /path/to/some/script \
 
 create `/path/to/some/script` with
 
