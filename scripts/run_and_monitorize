@@ -11,6 +11,7 @@ import psutil
 import os
 import sys
 import uuid
+import pkg_resources
 
 from var_monitor import ProcessTreeMonitor
 
@@ -58,7 +59,7 @@ def main():
     if args.conf:
         conf_file = args.conf
     else:
-        conf_file = '/etc/run_and_monitorize/run_and_monitorize.cfg'
+        conf_file = pkg_resources.resource_filename(pkg_resources.Requirement('run_and_monitorize'), 'run_and_monitorize/run_and_monitorize.cfg')
     config = ConfigParser.ConfigParser()
     config.read(conf_file)
     
