@@ -111,6 +111,21 @@ class MaxVMSMonitor(MaxRSSMonitor):
         else:
             self.var_value += some_process.memory_info().vms
 
+class MaxUSSMonitor(MaxRSSMonitor):
+    
+    def update_value(self, some_process):
+        if self.is_parent(some_process):
+            self.var_value = some_process.memory_full_info().uss
+        else:
+            self.var_value += some_process.memory_full_info().uss
+
+class MaxPSSMonitor(MaxRSSMonitor):
+    
+    def update_value(self, some_process):
+        if self.is_parent(some_process):
+            self.var_value = some_process.memory_full_info().pss
+        else:
+            self.var_value += some_process.memory_full_info().pss
 
 class CumulativeVarMonitor(VarMonitor):
     
@@ -203,6 +218,8 @@ class TotalHS06Monitor(CumulativeVarMonitor, RawVarMonitor):
 
 VAR_MONITOR_DICT = OrderedDict([('max_vms', MaxVMSMonitor),
             ('max_rss', MaxRSSMonitor),
+            ('max_uss', MaxUSSMonitor),
+            ('max_pss', MaxPSSMonitor),
             ('total_io_read', TotalIOReadMonitor),
             ('total_io_write', TotalIOWriteMonitor),
             ('total_cpu_time', TotalCpuTimeMonitor),
